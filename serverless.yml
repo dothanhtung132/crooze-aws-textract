@@ -1,0 +1,60 @@
+service: crooze
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  region: eu-west-1
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - textract:GetDocumentTextDetection
+        - textract:StartDocumentTextDetection
+        - s3:PutBucketNotification
+      Resource: "*"
+  
+plugins:
+  - serverless-offline
+custom:
+  serverless-offline:
+    port: 4000
+
+functions:
+  getPDFText:
+    handler: handler.getPDFText
+    events:
+      - http:
+          path: pdf-to-text
+          method: post
+          cors: true
+  ping:
+    handler: handler.ping
+    events:
+      - http:
+          path: ping
+          method: get
+          cors: true
+  textractStartFunction:
+    handler: handler.textractStartHandler
+    timeout: 60
+    events:
+      - s3:
+          bucket: BUCKET_NAME
+          events:
+            - s3:ObjectCreated:*
+          rules:
+            - suffix: .pdf
+          existing: true
+  TextractEndFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: handler.textractEndHandler
+      Runtime: nodejs12.x
+      Role: !GetAtt TextractRole.Arn
+      Policies:
+        - AWSLambdaExecute
+        - Statement:
+            - Effect: Allow
+              Action:
+                - "s3:PutObject"
+              Resource: !Join [":", ["arn:aws:s3::", !Ref BucketName]]
